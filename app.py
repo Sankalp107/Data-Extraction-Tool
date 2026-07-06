@@ -31,8 +31,8 @@ UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 app = Flask(__name__)
-app.secret_key = "datasheet-extractor-office-tool"  # only used to flash messages
-app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024  # 25 MB upload cap
+app.secret_key = "datasheet-extractor-office-tool"  
+app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024 
 
 db.init_db()
 
@@ -78,12 +78,11 @@ def upload():
         save_path = os.path.join(UPLOAD_DIR, filename)
         file.save(save_path)
 
-        # --- Extraction first, so we can use the datasheet number (if any)
-        # in the duplicate check below. ---
+        
         try:
             extracted = extractor.extract_from_pdf(save_path)
         except Exception as e:
-            # Surface a clean message instead of a raw traceback
+            
             err_msg = str(e)
             if "tesseract" in err_msg.lower():
                 err_msg = (
