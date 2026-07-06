@@ -38,53 +38,34 @@ try:
     import pytesseract
     import fitz
     from PIL import Image, ImageStat
-    # Verify the Tesseract *binary* is actually reachable, not just the
-    # Python wrapper. get_tesseract_version() raises TesseractNotFoundError
-    # if the binary is missing or not on PATH.
+   
     pytesseract.get_tesseract_version()
     OCR_AVAILABLE = True
 except Exception:
-    # pytesseract not installed, fitz not installed, OR Tesseract binary
-    # missing / not on PATH. All OCR paths are silently skipped; normal
-    # text + table + unicode-checkbox extraction still runs fine.
+   
     OCR_AVAILABLE = False
 
-# Uncomment + set if Tesseract is NOT on your PATH (common on Windows):
-# pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
-# ═══════════════════════════════════════════════════════════════════════
-# TUNING CONSTANTS
-# ═══════════════════════════════════════════════════════════════════════
 
-# OCR rendering scales
-OCR_ZOOM_FULLPAGE  = 2.5   # full-page scanned-page fallback
-OCR_ZOOM_IMAGE     = 3.0   # embedded image regions
-OCR_ZOOM_ANNOT     = 4.0   # annotation / signature regions
-OCR_ZOOM_CBIMAGE   = 5.0   # tiny image checkbox zoom
+OCR_ZOOM_FULLPAGE  = 2.5   
+OCR_ZOOM_IMAGE     = 3.0  
+OCR_ZOOM_ANNOT     = 4.0  
+OCR_ZOOM_CBIMAGE   = 5.0  
 
-# Page-level OCR fallback threshold (chars of real text)
 MIN_PAGE_TEXT      = 20
 
-# Checkbox geometry (pt)
-CB_MIN             = 6     # min side length to be a checkbox
-CB_MAX             = 70    # max side length to be a checkbox
-CB_ASPECT          = 2.0   # max w/h ratio (must be roughly square/round)
-CB_Y_TOL           = 16    # vertical tolerance for label matching
-CB_LABEL_RIGHT     = 160   # max distance to the right for label words
-CB_OVERLAP_TOL     = 6     # pt – how close two rects must be to be "same"
+CB_MIN             = 6   
+CB_MAX             = 70    
+CB_ASPECT          = 2.0  
+CB_Y_TOL           = 16    
+CB_LABEL_RIGHT     = 160   
+CB_OVERLAP_TOL     = 6    
 
-# Image checkbox: brightness threshold (0=black, 255=white)
-# Images with mean brightness below this are considered "checked" (filled)
 IMG_CB_DARK_THRESH = 160
-# Min/max pt size for an embedded image to be treated as a checkbox icon
 IMG_CB_MIN_PT      = 6
 IMG_CB_MAX_PT      = 60
-# Minimum OCR text length to count as real content
-MIN_OCR_TEXT       = 3
 
-# ═══════════════════════════════════════════════════════════════════════
-# REGEX  –  units, key-value patterns, datasheet number
-# ═══════════════════════════════════════════════════════════════════════
+MIN_OCR_TEXT       = 3
 
 UNITS = [
     "mm","cm","m","km","in","inch","ft",
@@ -121,20 +102,15 @@ SKIP_LINES = [
     re.compile(r"^\s*\d+\s*$"),
 ]
 
-# Unicode checkbox characters
 CHECKED_CHARS   = set("■▪●☑☒✓✔✗✘▶◆◉")
 UNCHECKED_CHARS = set("□▫○☐◯◌")
 ALL_CB_CHARS    = CHECKED_CHARS | UNCHECKED_CHARS
 _CB_SPLIT_RE    = re.compile(r"([" + re.escape("".join(ALL_CB_CHARS)) + r"])")
 
-# AcroForm widget type constants
-_CB_TYPE  = 2   # fitz.PDF_WIDGET_TYPE_CHECKBOX
-_RB_TYPE  = 5   # fitz.PDF_WIDGET_TYPE_RADIOBUTTON
+_CB_TYPE  = 2   
+_RB_TYPE  = 5  
 ACRO_CHECKED_VALUES = {"yes","on","true","checked","1","x"}
 
-# ═══════════════════════════════════════════════════════════════════════
-# LOW-LEVEL HELPERS
-# ═══════════════════════════════════════════════════════════════════════
 
 def _split_vu(raw):
     raw = raw.strip().strip(".")
@@ -195,9 +171,6 @@ def _label_right(rect, words, x_margin=CB_LABEL_RIGHT, y_tol=CB_Y_TOL):
     return " ".join(w["text"] for w in near)
 
 
-# ═══════════════════════════════════════════════════════════════════════
-# PATH 1: TEXT LINES
-# ═══════════════════════════════════════════════════════════════════════
 
 def parse_text_lines(text):
     results = []
@@ -207,7 +180,7 @@ def parse_text_lines(text):
         if any(p.match(line) for p in SKIP_LINES):
             continue
         if any(ch in ALL_CB_CHARS for ch in line):
-            continue   # handled by unicode checkbox parser
+            continue   
         for pat in KV_PATTERNS:
             m = pat.match(line)
             if not m:
@@ -222,9 +195,6 @@ def parse_text_lines(text):
     return results
 
 
-# ═══════════════════════════════════════════════════════════════════════
-# PATH 2: TABLES
-# ═══════════════════════════════════════════════════════════════════════
 
 def parse_table(table):
     results = []
@@ -248,9 +218,6 @@ def parse_table(table):
     return results
 
 
-# ═══════════════════════════════════════════════════════════════════════
-# PATH 3a: UNICODE CHECKBOX GLYPHS
-# ═══════════════════════════════════════════════════════════════════════
 
 def parse_unicode_checkboxes(text):
     """
@@ -285,9 +252,6 @@ def parse_unicode_checkboxes(text):
     return results
 
 
-# ═══════════════════════════════════════════════════════════════════════
-# PATH 3b + 3c: ACROFORM CHECKBOXES AND RADIO BUTTONS
-# ═══════════════════════════════════════════════════════════════════════
 
 def _extract_acroform(fitz_page, page_idx, words):
     results = []
@@ -296,7 +260,6 @@ def _extract_acroform(fitz_page, page_idx, words):
     except Exception:
         return results
 
-    # Group radio buttons by field_name so we can mark the selected one
     radio_groups = {}
     for w in widgets:
         if w.field_type == _RB_TYPE:
@@ -322,9 +285,6 @@ def _extract_acroform(fitz_page, page_idx, words):
     return results
 
 
-# ═══════════════════════════════════════════════════════════════════════
-# PATH 3d + 3e: VECTOR RECTANGLES AND CIRCLES
-# ═══════════════════════════════════════════════════════════════════════
 
 def _is_square_ish(rect):
     w, h = rect.width, rect.height
@@ -344,12 +304,10 @@ def _extract_vector_shapes(fitz_page, page_idx, words, skip_rects):
     except Exception:
         return results
 
-    # Separate stroke-only outlines from filled shapes
     outlines = [d for d in drawings if _is_square_ish(d.get("rect") or fitz.Rect())]
     filled   = [d for d in drawings if d.get("fill") is not None and
                 _is_square_ish(d.get("rect") or fitz.Rect())]
 
-    # De-duplicate outlines: keep largest when two are at the same position
     outer = []
     for d in outlines:
         dominated = any(_rects_overlap(d["rect"], o["rect"]) and
@@ -359,13 +317,12 @@ def _extract_vector_shapes(fitz_page, page_idx, words, skip_rects):
 
     for d in outer:
         rect = d["rect"]
-        # Skip if already covered by an AcroForm widget
+      
         if any(_rects_overlap(rect, sr) for sr in skip_rects):
             continue
         items = d.get("items", [])
         item_types = {it[0] for it in items}
 
-        # Determine shape type
         if "re" in item_types:
             shape = "square"
         elif "c" in item_types:
@@ -373,7 +330,6 @@ def _extract_vector_shapes(fitz_page, page_idx, words, skip_rects):
         else:
             continue
 
-        # Checked = any filled drawing at the same position
         is_checked = any(_rects_overlap(rect, fd["rect"]) for fd in filled
                          if fd.get("rect") is not None)
 
@@ -386,9 +342,6 @@ def _extract_vector_shapes(fitz_page, page_idx, words, skip_rects):
     return results
 
 
-# ═══════════════════════════════════════════════════════════════════════
-# PATH 3f: IMAGE-BASED CHECKBOXES
-# ═══════════════════════════════════════════════════════════════════════
 
 _CB_OCR_CHARS = re.compile(r"[■□☑☐✓✔✗✘xX×]")
 
@@ -428,13 +381,11 @@ def _extract_image_checkboxes(fitz_page, page_idx, words, skip_rects):
             except Exception:
                 continue
 
-            # Method 1: OCR for explicit checkbox characters
             ocr_text = (pytesseract.image_to_string(
                 pil_img, config="--psm 10 -c tessedit_char_whitelist=■□☑☐✓✔✗✘xX×01") or "").strip()
             has_checkmark = bool(_CB_OCR_CHARS.search(ocr_text))
             checked_by_ocr = has_checkmark and any(c in CHECKED_CHARS or c in "✓✔xX×1" for c in ocr_text)
 
-            # Method 2: Brightness analysis
             brightness = _img_brightness(pil_img)
             checked_by_brightness = brightness < IMG_CB_DARK_THRESH
 
@@ -442,16 +393,12 @@ def _extract_image_checkboxes(fitz_page, page_idx, words, skip_rects):
 
             label = _label_right(rect, words)
             if not label:
-                continue  # no label = can't identify what this checkbox means
+                continue 
 
             results.append((_kv(label, "Checked" if is_checked else "Unchecked", source="checkbox"), rect))
 
     return results
 
-
-# ═══════════════════════════════════════════════════════════════════════
-# COMBINED CHECKBOX EXTRACTOR
-# ═══════════════════════════════════════════════════════════════════════
 
 def extract_checkboxes(pdf_path):
     """
@@ -470,17 +417,14 @@ def extract_checkboxes(pdf_path):
         fitz_page = doc[page_idx]
         words     = _plumb_words(pdf_path, page_idx)
 
-        # AcroForm (checkbox + radio buttons)
         acro_items  = _extract_acroform(fitz_page, page_idx, words)
         acro_rects  = [item[1] for item in acro_items]
         results.extend(item[0] for item in acro_items)
 
-        # Vector shapes (rect + circle)
         vec_items   = _extract_vector_shapes(fitz_page, page_idx, words, acro_rects)
         vec_rects   = [item[1] for item in vec_items]
         results.extend(item[0] for item in vec_items)
 
-        # Image-based checkboxes
         img_items   = _extract_image_checkboxes(fitz_page, page_idx, words,
                                                  acro_rects + vec_rects)
         results.extend(item[0] for item in img_items)
@@ -488,10 +432,6 @@ def extract_checkboxes(pdf_path):
     doc.close()
     return results
 
-
-# ═══════════════════════════════════════════════════════════════════════
-# PATH 4 + 5: UNIVERSAL IMAGE TEXT + ANNOTATION TEXT
-# ═══════════════════════════════════════════════════════════════════════
 
 def extract_all_image_text(pdf_path):
     """
@@ -518,7 +458,6 @@ def extract_all_image_text(pdf_path):
         fitz_page  = doc[page_idx]
         seen_rects = []
 
-        # ── Embedded images ──────────────────────────────────────────
         try:
             images = fitz_page.get_images(full=True)
         except Exception:
@@ -543,7 +482,6 @@ def extract_all_image_text(pdf_path):
                         "cb":   parse_unicode_checkboxes(text),
                     })
 
-        # ── Annotations ──────────────────────────────────────────────
         try:
             annots = list(fitz_page.annots() or [])
         except Exception:
@@ -568,10 +506,6 @@ def extract_all_image_text(pdf_path):
     return img_results, ann_results
 
 
-# ═══════════════════════════════════════════════════════════════════════
-# DATASHEET NUMBER DETECTION
-# ═══════════════════════════════════════════════════════════════════════
-
 def find_datasheet_no(full_text):
     if not full_text:
         return None
@@ -579,9 +513,6 @@ def find_datasheet_no(full_text):
     return m.group(1).strip() if m else None
 
 
-# ═══════════════════════════════════════════════════════════════════════
-# MAIN ENTRY POINT
-# ═══════════════════════════════════════════════════════════════════════
 
 def extract_from_pdf(pdf_path):
     """
@@ -601,7 +532,7 @@ def extract_from_pdf(pdf_path):
     full_text_parts   = []
     ocr_used_on_pages = []
 
-    # ── Paths 1 + 2 + 3a: text, tables, unicode checkboxes ───────────
+
     with pdfplumber.open(pdf_path) as pdf:
         page_count = len(pdf.pages)
 
@@ -617,7 +548,6 @@ def extract_from_pdf(pdf_path):
                         if cell:
                             table_cell_text.add(cell.strip())
 
-            # Path 6: whole-page OCR fallback for scanned pages
             if len(page_text.strip()) < MIN_PAGE_TEXT and not tables and OCR_AVAILABLE:
                 try:
                     doc_tmp = fitz.open(pdf_path)
@@ -644,17 +574,15 @@ def extract_from_pdf(pdf_path):
 
     full_text = "\n".join(full_text_parts)
 
-    # ── Paths 3b-3f: all checkbox sub-modes ──────────────────────────
     all_kv.extend(extract_checkboxes(pdf_path))
 
-    # ── Paths 4 + 5: universal image + annotation OCR ────────────────
     image_results, ann_results = extract_all_image_text(pdf_path)
 
     for ir in image_results:
         if ir["kv"]:
-            all_kv.extend(ir["kv"])   # parsed key-value pairs from image
+            all_kv.extend(ir["kv"])  
         if ir["cb"]:
-            all_kv.extend(ir["cb"])   # checkboxes found in image text
+            all_kv.extend(ir["cb"])
         if not ir["kv"] and not ir["cb"]:
             all_kv.append(_kv(f"Image Text (p.{ir['page']})", ir["text"][:200], source="image"))
 
@@ -663,7 +591,6 @@ def extract_from_pdf(pdf_path):
         signatures.append({"page": ar["page"], "text": ar["text"]})
         all_kv.append(_kv("Signed By", ar["text"], source="signature"))
 
-    # ── Deduplicate ───────────────────────────────────────────────────
     seen, deduped = set(), []
     for item in all_kv:
         sig = (item["key"].lower(),
